@@ -39,7 +39,7 @@ Game :: struct {
 // ------------------------------------------------------------------------------------------------
 
 TICKS_BETWEEN_SHOTS :: 20
-MAX_LASERS :: WINDOW_HEIGHT / (60 / TICKS_BETWEEN_SHOTS)
+MAX_LASERS :: WINDOW_WIDTH / (60 / TICKS_BETWEEN_SHOTS)
 
 MOVEMENT_AMOUNT :: 5
 PLAYER_SPEED :: 400
