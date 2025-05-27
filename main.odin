@@ -1,4 +1,4 @@
-dpackage main
+package main
 
 import "core:fmt"
 import sdl "vendor:sdl3"
@@ -75,14 +75,14 @@ mainLoop :: proc() {
 	game.perfFrequency = f64(sdl.GetPerformanceFrequency())
 	start: f64
 	end: f64
+
 	event: sdl.Event
 	state: [^]u8
 
 	for {
 		start = getTime()
 
-		exitGame := userInput(&event)
-		if exitGame {
+		if exitGame := userInput(&event); exitGame {
 			return
 		}
 		updateAssets()
@@ -90,7 +90,8 @@ mainLoop :: proc() {
 
 		end = getTime()
 
-		// Loop lock to hit our framerate, around 17ms must have passed before moving on
+		// Loop lock to hit our framerate, around 17ms must have passed before moving onto the
+		// next frame
 		for end - start < TARGET_DELTA_TIME {
 			end = getTime()
 		}
@@ -119,7 +120,7 @@ createEntities :: proc() {
 		y = WINDOW_WIDTH / 2,
 	}
 
-	// Load player
+	// Load player texture
 	playerTexture := sdlImage.LoadTexture(game.renderer, "./assets/player.png")
 	assert(
 		playerTexture != nil,
@@ -138,7 +139,7 @@ createEntities :: proc() {
 	game.player.destination.w = f32(playerTexture.w) / playerScaleFactor
 	game.player.destination.h = f32(playerTexture.h) / playerScaleFactor
 
-	// Load laser 
+	// Load laser texture
 	laserScaleFactor: f32 = 3
 	laserTexture := sdlImage.LoadTexture(game.renderer, "./assets/bulletOrange.png")
 	assert(
@@ -187,7 +188,7 @@ draw :: proc() {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Initalize SDL
+// Initalize SDL 
 // ------------------------------------------------------------------------------------------------
 
 initWindow :: proc() {
@@ -202,7 +203,7 @@ initWindow :: proc() {
 	game.renderer = sdl.CreateRenderer(game.window, nil)
 	assert(
 		game.renderer != nil,
-		fmt.tprintf("error: sld.CreateRenderer() failed: %v", sdl.GetError()),
+		fmt.tprintf("error: sld.CreateRenderer() failed: %v", string(sdl.GetError())),
 	)
 }
 
@@ -262,7 +263,6 @@ updateAssets :: proc() {
 
 		if game.laser[i].health > 0 {
 			game.laser[i].destination.x += getDeltaMotion(LASER_SPEED)
-			fmt.println("Moving laser: ", i)
 		}
 	}
 }
