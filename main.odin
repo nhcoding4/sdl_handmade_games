@@ -256,13 +256,14 @@ updateAssets :: proc() {
 		}
 	}
 
-	for i in 0 ..< MAX_LASERS {
-		if game.laser[i].destination.x > WINDOW_WIDTH {
-			game.laser[i].health = 0
-		}
 
+	for i in 0 ..< MAX_LASERS {
 		if game.laser[i].health > 0 {
 			game.laser[i].destination.x += getDeltaMotion(LASER_SPEED)
+
+			if game.laser[i].destination.x > WINDOW_WIDTH {
+				game.laser[i].health = 0
+			}
 		}
 	}
 }
