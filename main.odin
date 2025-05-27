@@ -67,7 +67,7 @@ main :: proc() {
 }
 
 mainLoop :: proc() {
-	getTime := proc() -> f64 {
+	getTime := #force_inline proc() -> f64 {
 		return f64(sdl.GetPerformanceCounter()) * 1000 / game.perfFrequency
 	}
 
@@ -169,7 +169,7 @@ createEntities :: proc() {
 // Draw assets onto the screen
 // ------------------------------------------------------------------------------------------------
 
-draw :: proc() {
+draw :: #force_inline proc() {
 	// Render assets
 	sdl.RenderTexture(game.renderer, game.player.texture, nil, &game.player.destination)
 
@@ -214,8 +214,8 @@ initWindow :: proc() {
 // Update assets
 // ------------------------------------------------------------------------------------------------
 
-updateAssets :: proc() {
-	movePlayer := proc(x: f32, y: f32) {
+updateAssets :: #force_inline proc() {
+	movePlayer := #force_inline proc(x: f32, y: f32) {
 		// Clamp keeps a number within a range
 		game.player.destination.x = clamp(
 			game.player.destination.x + x,
@@ -230,7 +230,7 @@ updateAssets :: proc() {
 	}
 
 	// Unlink Movement and framerate
-	getDeltaMotion := proc(speed: f32) -> f32 {
+	getDeltaMotion := #force_inline proc(speed: f32) -> f32 {
 		return speed * (f32(TARGET_DELTA_TIME) / 1000)
 	}
 
@@ -278,7 +278,7 @@ updateAssets :: proc() {
 // User input
 // ------------------------------------------------------------------------------------------------
 
-userInput :: proc(event: ^sdl.Event) -> bool {
+userInput :: #force_inline proc(event: ^sdl.Event) -> bool {
 	keyboardState := sdl.GetKeyboardState(nil)
 
 	for sdl.PollEvent(event) {
