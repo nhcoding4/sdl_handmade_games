@@ -140,7 +140,6 @@ createEntities :: proc() {
 	game.player.destination.h = f32(playerTexture.h) / playerScaleFactor
 
 	// Load laser texture
-	laserScaleFactor: f32 = 3
 	laserTexture := sdlImage.LoadTexture(game.renderer, "./assets/bulletOrange.png")
 	assert(
 		playerTexture != nil,
@@ -150,13 +149,17 @@ createEntities :: proc() {
 		),
 	)
 
+	laserScaleFactor: f32 = 3
+	laserDestWidth := f32(laserTexture.w) / laserScaleFactor
+	laserDestHeight := f32(laserTexture.h) / laserScaleFactor
+
 	for i in 0 ..< MAX_LASERS {
 		newLaser := Entity {
 			texture     = laserTexture,
 			destination = destination,
 		}
-		newLaser.destination.w = f32(laserTexture.w) / laserScaleFactor
-		newLaser.destination.h = f32(laserTexture.h) / laserScaleFactor
+		newLaser.destination.w = laserDestWidth
+		newLaser.destination.h = laserDestHeight
 
 		game.laser[i] = newLaser
 	}
@@ -231,17 +234,19 @@ updateAssets :: proc() {
 		return speed * (f32(TARGET_DELTA_TIME) / 1000)
 	}
 
+	playerMovement := getDeltaMotion(PLAYER_SPEED)
+
 	if game.left {
-		movePlayer(-getDeltaMotion(PLAYER_SPEED), 0)
+		movePlayer(-playerMovement, 0)
 	}
 	if game.right {
-		movePlayer(getDeltaMotion(PLAYER_SPEED), 0)
+		movePlayer(playerMovement, 0)
 	}
 	if game.up {
-		movePlayer(0, -getDeltaMotion(PLAYER_SPEED))
+		movePlayer(0, -playerMovement)
 	}
 	if game.down {
-		movePlayer(0, getDeltaMotion(PLAYER_SPEED))
+		movePlayer(0, playerMovement)
 	}
 
 	if game.fire && game.ticksSinceFired >= TICKS_BETWEEN_SHOTS {
@@ -256,10 +261,11 @@ updateAssets :: proc() {
 		}
 	}
 
+	laserMovement := getDeltaMotion(LASER_SPEED)
 
 	for i in 0 ..< MAX_LASERS {
 		if game.laser[i].health > 0 {
-			game.laser[i].destination.x += getDeltaMotion(LASER_SPEED)
+			game.laser[i].destination.x += laserMovement
 
 			if game.laser[i].destination.x > WINDOW_WIDTH {
 				game.laser[i].health = 0
