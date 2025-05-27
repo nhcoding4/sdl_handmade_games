@@ -24,7 +24,7 @@ Game :: struct {
 	laser:            [MAX_LASERS]Entity,
 	fire:             bool,
 	activeLaserCount: i32,
-	ticksSinceFired:  i32,
+	ticksUntilFire:   i32,
 
 	// Player 
 	player:           Entity,
@@ -39,7 +39,7 @@ Game :: struct {
 // ------------------------------------------------------------------------------------------------
 
 TICKS_BETWEEN_SHOTS :: 20
-MAX_LASERS :: (60 / TICKS_BETWEEN_SHOTS) * 2 // Eyeballed it 
+MAX_LASERS :: WINDOW_HEIGHT / (60 / TICKS_BETWEEN_SHOTS)
 
 MOVEMENT_AMOUNT :: 5
 PLAYER_SPEED :: 400
@@ -86,7 +86,7 @@ mainLoop :: proc() {
 		if exitGame := userInput(&event); exitGame {
 			return
 		}
-		updateAssets()
+		update()
 		draw()
 
 		end = getTime()
@@ -97,7 +97,6 @@ mainLoop :: proc() {
 			end = getTime()
 		}
 
-		game.ticksSinceFired += 1
 	}
 }
 
@@ -212,10 +211,16 @@ initWindow :: proc() {
 }
 
 // ------------------------------------------------------------------------------------------------
-// Update assets
+// Update
 // ------------------------------------------------------------------------------------------------
 
-updateAssets :: #force_inline proc() {
+update :: #force_inline proc() {
+	// Unlink Movement and framerate
+	getDeltaMotion := #force_inline proc(speed: f32) -> f32 {
+		return speed * TARGET_DELTA_TIME / 1000
+	}
+
+	// Update player 
 	movePlayer := #force_inline proc(x: f32, y: f32) {
 		// Clamp keeps a number within a range
 		game.player.destination.x = clamp(
@@ -228,11 +233,6 @@ updateAssets :: #force_inline proc() {
 			0,
 			WINDOW_HEIGHT - game.player.destination.h,
 		)
-	}
-
-	// Unlink Movement and framerate
-	getDeltaMotion := #force_inline proc(speed: f32) -> f32 {
-		return speed * TARGET_DELTA_TIME / 1000
 	}
 
 	playerMovement := getDeltaMotion(PLAYER_SPEED)
@@ -250,13 +250,14 @@ updateAssets :: #force_inline proc() {
 		movePlayer(0, playerMovement)
 	}
 
-	if game.fire && game.ticksSinceFired >= TICKS_BETWEEN_SHOTS {
+	// Update laser
+	if game.fire && game.ticksUntilFire == 0 {
 		for i in 0 ..< MAX_LASERS {
 			if game.laser[i].health == 0 {
 				game.laser[i].destination.x = game.player.destination.x + 30
 				game.laser[i].destination.y = game.player.destination.y
 				game.laser[i].health = 1
-				game.ticksSinceFired = 0
+				game.ticksUntilFire = TICKS_BETWEEN_SHOTS
 				game.activeLaserCount += 1
 				break
 			}
@@ -277,6 +278,8 @@ updateAssets :: #force_inline proc() {
 			}
 		}
 	}
+
+	game.ticksUntilFire = clamp(game.ticksUntilFire - 1, 0, TICKS_BETWEEN_SHOTS)
 }
 
 // ------------------------------------------------------------------------------------------------
