@@ -244,9 +244,9 @@ updateAssets :: proc() {
 		movePlayer(0, getDeltaMotion(PLAYER_SPEED))
 	}
 
-	if game.ticksSinceFired >= TICKS_BETWEEN_SHOTS {
+	if game.fire && game.ticksSinceFired >= TICKS_BETWEEN_SHOTS {
 		for i in 0 ..< MAX_LASERS {
-			if game.fire && game.laser[i].health == 0 {
+			if game.laser[i].health == 0 {
 				game.laser[i].destination.x = game.player.destination.x + 30
 				game.laser[i].destination.y = game.player.destination.y
 				game.laser[i].health = 1
