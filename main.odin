@@ -1,4 +1,4 @@
-package main
+dpackage main
 
 import "core:fmt"
 import sdl "vendor:sdl3"
@@ -139,20 +139,17 @@ createEntities :: proc() {
 	game.player.destination.h = f32(playerTexture.h) / playerScaleFactor
 
 	// Load laser 
-
-
 	laserScaleFactor: f32 = 3
+	laserTexture := sdlImage.LoadTexture(game.renderer, "./assets/bulletOrange.png")
+	assert(
+		playerTexture != nil,
+		fmt.tprintf(
+			"error: sdlImage.LoadTexture() failed while loading laserTexture: %v",
+			sdl.GetError(),
+		),
+	)
 
 	for i in 0 ..< MAX_LASERS {
-		laserTexture := sdlImage.LoadTexture(game.renderer, "./assets/bulletOrange.png")
-		assert(
-			playerTexture != nil,
-			fmt.tprintf(
-				"error: sdlImage.LoadTexture() failed while loading laserTexture: %v",
-				sdl.GetError(),
-			),
-		)
-
 		newLaser := Entity {
 			texture     = laserTexture,
 			destination = destination,
