@@ -16,21 +16,22 @@ Entity :: struct {
 
 Game :: struct {
 	// Context
-	perfFrequency:   f64,
-	window:          ^sdl.Window,
-	renderer:        ^sdl.Renderer,
+	perfFrequency:    f32,
+	window:           ^sdl.Window,
+	renderer:         ^sdl.Renderer,
 
 	// Laser
-	laser:           [MAX_LASERS]Entity,
-	fire:            bool,
-	ticksSinceFired: i32,
+	laser:            [MAX_LASERS]Entity,
+	fire:             bool,
+	activeLaserCount: i32,
+	ticksSinceFired:  i32,
 
 	// Player 
-	player:          Entity,
-	left:            bool,
-	right:           bool,
-	up:              bool,
-	down:            bool,
+	player:           Entity,
+	left:             bool,
+	right:            bool,
+	up:               bool,
+	down:             bool,
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -38,13 +39,13 @@ Game :: struct {
 // ------------------------------------------------------------------------------------------------
 
 TICKS_BETWEEN_SHOTS :: 20
-MAX_LASERS :: (60 / TICKS_BETWEEN_SHOTS) * 2
+MAX_LASERS :: (60 / TICKS_BETWEEN_SHOTS) * 2 // Eyeballed it 
 
 MOVEMENT_AMOUNT :: 5
 PLAYER_SPEED :: 400
 LASER_SPEED :: 700
 
-TARGET_DELTA_TIME :: 1000 / 60
+TARGET_DELTA_TIME :: 1000.0 / 60.0
 
 WINDOW_WIDTH :: 1600
 WINDOW_HEIGHT :: 960
@@ -67,14 +68,14 @@ main :: proc() {
 }
 
 mainLoop :: proc() {
-	getTime := #force_inline proc() -> f64 {
-		return f64(sdl.GetPerformanceCounter()) * 1000 / game.perfFrequency
+	getTime := #force_inline proc() -> f32 {
+		return f32(sdl.GetPerformanceCounter()) * 1000 / game.perfFrequency
 	}
 
 	// Enforce a framerate on our game 
-	game.perfFrequency = f64(sdl.GetPerformanceFrequency())
-	start: f64
-	end: f64
+	game.perfFrequency = f32(sdl.GetPerformanceFrequency())
+	start: f32
+	end: f32
 
 	event: sdl.Event
 	state: [^]u8
@@ -231,7 +232,7 @@ updateAssets :: #force_inline proc() {
 
 	// Unlink Movement and framerate
 	getDeltaMotion := #force_inline proc(speed: f32) -> f32 {
-		return speed * (f32(TARGET_DELTA_TIME) / 1000)
+		return speed * TARGET_DELTA_TIME / 1000
 	}
 
 	playerMovement := getDeltaMotion(PLAYER_SPEED)
@@ -256,6 +257,7 @@ updateAssets :: #force_inline proc() {
 				game.laser[i].destination.y = game.player.destination.y
 				game.laser[i].health = 1
 				game.ticksSinceFired = 0
+				game.activeLaserCount += 1
 				break
 			}
 		}
@@ -263,12 +265,15 @@ updateAssets :: #force_inline proc() {
 
 	laserMovement := getDeltaMotion(LASER_SPEED)
 
-	for i in 0 ..< MAX_LASERS {
-		if game.laser[i].health > 0 {
-			game.laser[i].destination.x += laserMovement
+	if game.activeLaserCount > 0 {
+		for i in 0 ..< MAX_LASERS {
+			if game.laser[i].health > 0 {
+				game.laser[i].destination.x += laserMovement
 
-			if game.laser[i].destination.x > WINDOW_WIDTH {
-				game.laser[i].health = 0
+				if game.laser[i].destination.x > WINDOW_WIDTH {
+					game.laser[i].health = 0
+					game.activeLaserCount -= 1
+				}
 			}
 		}
 	}
