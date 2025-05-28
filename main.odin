@@ -38,7 +38,7 @@ Game :: struct {
 // Constants
 // ------------------------------------------------------------------------------------------------
 
-TICKS_BETWEEN_SHOTS :: 20
+TICKS_BETWEEN_SHOTS :: 20 // 60 / TICKS_PER_SHOT = amount of lasers active at a single point 
 MAX_LASERS :: WINDOW_WIDTH / TICKS_BETWEEN_SHOTS // more than enough to have a smooth stream
 
 MOVEMENT_AMOUNT :: 5
@@ -96,7 +96,6 @@ mainLoop :: proc() {
 		for end - start < TARGET_DELTA_TIME {
 			end = getTime()
 		}
-
 	}
 }
 
@@ -152,15 +151,18 @@ createEntities :: proc() {
 	laserScaleFactor: f32 = 3
 	laserDestWidth := f32(laserTexture.w) / laserScaleFactor
 	laserDestHeight := f32(laserTexture.h) / laserScaleFactor
+	laserStartingX := f32(WINDOW_WIDTH + 1)
 
 	for i in 0 ..< MAX_LASERS {
 		newLaser := Entity {
-			texture     = laserTexture,
-			destination = destination,
+			texture = laserTexture,
+			destination = {
+				x = laserStartingX,
+				y = WINDOW_HEIGHT,
+				w = laserDestWidth,
+				h = laserDestHeight,
+			},
 		}
-		newLaser.destination.w = laserDestWidth
-		newLaser.destination.h = laserDestHeight
-
 		game.laser[i] = newLaser
 	}
 }
@@ -174,7 +176,7 @@ draw :: #force_inline proc() {
 	sdl.RenderTexture(game.renderer, game.player.texture, nil, &game.player.destination)
 
 	for i in 0 ..< MAX_LASERS {
-		if game.laser[i].health > 0 {
+		if game.laser[i].destination.x < WINDOW_WIDTH {
 			sdl.RenderTexture(
 				game.renderer,
 				game.laser[i].texture,
@@ -251,9 +253,9 @@ update :: #force_inline proc() {
 	}
 
 	// Update laser
-	if game.fire && game.ticksUntilFire == 0 {
+	if game.fire && game.ticksUntilFire <= 0 {
 		for i in 0 ..< MAX_LASERS {
-			if game.laser[i].health == 0 {
+			if game.laser[i].destination.x > WINDOW_WIDTH {
 				game.laser[i].destination.x = game.player.destination.x + 30
 				game.laser[i].destination.y = game.player.destination.y
 				game.laser[i].health = 1
@@ -268,7 +270,7 @@ update :: #force_inline proc() {
 
 	if game.activeLaserCount > 0 {
 		for i in 0 ..< MAX_LASERS {
-			if game.laser[i].health > 0 {
+			if game.laser[i].destination.x < WINDOW_WIDTH {
 				game.laser[i].destination.x += laserMovement
 
 				if game.laser[i].destination.x > WINDOW_WIDTH {
@@ -279,7 +281,7 @@ update :: #force_inline proc() {
 		}
 	}
 
-	game.ticksUntilFire = clamp(game.ticksUntilFire - 1, 0, TICKS_BETWEEN_SHOTS)
+	game.ticksUntilFire -= 1
 }
 
 // ------------------------------------------------------------------------------------------------
