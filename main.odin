@@ -9,50 +9,53 @@ import sdlImage "vendor:sdl3/image"
 // ------------------------------------------------------------------------------------------------
 
 Entity :: struct {
-	texture:     ^sdl.Texture,
 	destination: sdl.FRect,
-	health:      i32,
+	health:      u8,
+}
+
+Lasers :: struct {
+	active, inactive:       [MAX_LASERS]Entity,
+	activeIdx, inactiveIdx: byte,
 }
 
 Game :: struct {
 	// Context
-	perfFrequency:    f32,
-	window:           ^sdl.Window,
-	renderer:         ^sdl.Renderer,
+	renderer:       ^sdl.Renderer,
+	textures:       [TOTAL_TEXTURES]^sdl.Texture,
+	keysPressed:    [^]bool,
 
 	// Laser
-	laser:            [MAX_LASERS]Entity,
-	fire:             bool,
-	activeLaserCount: i32,
-	ticksUntilFire:   i32,
+	lasers:         Lasers,
+	ticksUntilFire: i32,
 
 	// Player 
-	player:           Entity,
-	left:             bool,
-	right:            bool,
-	up:               bool,
-	down:             bool,
+	player:         Entity,
 }
 
-// ------------------------------------------------------------------------------------------------
-// Constants
-// ------------------------------------------------------------------------------------------------
-
-TICKS_BETWEEN_SHOTS :: 20 // 60 / TICKS_PER_SHOT = amount of lasers active at a single point 
-MAX_LASERS :: WINDOW_WIDTH / TICKS_BETWEEN_SHOTS // more than enough to have a smooth stream
-
-MOVEMENT_AMOUNT :: 5
-PLAYER_SPEED :: 400
-LASER_SPEED :: 700
-
-TARGET_DELTA_TIME :: 1000.0 / 60.0
-
-WINDOW_WIDTH :: 1600
-WINDOW_HEIGHT :: 960
 
 // ------------------------------------------------------------------------------------------------
 // Globals
 // ------------------------------------------------------------------------------------------------
+
+// 60 / TICKS_PER_SHOT = lasers fired per second 
+TICKS_BETWEEN_SHOTS :: 20
+// Should probaby be linked to width and limited to X amount. Play around with for desired effect
+MAX_LASERS :: 10
+
+TARGET_DELTA_TIME :: 1000.0 / 60.0
+
+PLAYER_SPEED :: 400
+LASER_SPEED :: 700
+LASER_DELTA_SPEED :: LASER_SPEED * TARGET_DELTA_TIME / 1000
+PLAYER_DELTA_SPEED :: PLAYER_SPEED * TARGET_DELTA_TIME / 1000
+
+WINDOW_WIDTH :: 1600
+WINDOW_HEIGHT :: 960
+
+// We use this as essentially constant ptrs into our texture ptr array
+TOTAL_TEXTURES :: byte(2)
+PLAYER_TEXTURE_IDX :: 0
+LASER_TEXTURE_IDX :: 1
 
 game: Game
 
@@ -61,40 +64,39 @@ game: Game
 // ------------------------------------------------------------------------------------------------
 
 main :: proc() {
-	initWindow()
-	defer cleanup()
+	window := initWindow()
+	defer cleanup(window)
 	createEntities()
 	mainLoop()
 }
 
 mainLoop :: proc() {
-	getTime := #force_inline proc() -> f32 {
-		return f32(sdl.GetPerformanceCounter()) * 1000 / game.perfFrequency
+	getTime := #force_inline proc(perfFrequency: f64) -> f64 {
+		return f64(sdl.GetPerformanceCounter()) * 1000 / perfFrequency
 	}
 
 	// Enforce a framerate on our game 
-	game.perfFrequency = f32(sdl.GetPerformanceFrequency())
-	start: f32
-	end: f32
+	start: f64
+	end: f64
+	perfFrequency := f64(sdl.GetPerformanceFrequency())
 
 	event: sdl.Event
-	state: [^]u8
 
 	for {
-		start = getTime()
+		start = getTime(perfFrequency)
 
 		if exitGame := userInput(&event); exitGame {
 			return
 		}
-		update()
+		updateAssets()
 		draw()
 
-		end = getTime()
+		end = getTime(perfFrequency)
 
 		// Loop lock to hit our framerate, around 17ms must have passed before moving onto the
 		// next frame
 		for end - start < TARGET_DELTA_TIME {
-			end = getTime()
+			end = getTime(perfFrequency)
 		}
 	}
 }
@@ -103,8 +105,8 @@ mainLoop :: proc() {
 // Free memory 
 // ------------------------------------------------------------------------------------------------
 
-cleanup :: proc() {
-	sdl.DestroyWindow(game.window)
+cleanup :: proc(window: ^sdl.Window) {
+	sdl.DestroyWindow(window)
 	sdl.DestroyRenderer(game.renderer)
 	sdl.Quit()
 }
@@ -114,48 +116,47 @@ cleanup :: proc() {
 // ------------------------------------------------------------------------------------------------
 
 createEntities :: proc() {
-	destination := sdl.FRect {
-		x = 20,
-		y = WINDOW_WIDTH / 2,
-	}
-
-	// Load player texture
-	playerTexture := sdlImage.LoadTexture(game.renderer, "./assets/player.png")
+	// Player
+	game.textures[PLAYER_TEXTURE_IDX] = sdlImage.LoadTexture(game.renderer, "./assets/player.png")
 	assert(
-		playerTexture != nil,
+		game.textures[PLAYER_TEXTURE_IDX] != nil,
 		fmt.tprintf(
 			"error: sdlImage.LoadTexture() failed while loading playerTexture: %v",
 			sdl.GetError(),
 		),
 	)
 
-	playerScaleFactor: f32 = 10
+	playerScaleFactor :: 10
 	game.player = Entity {
-		texture     = playerTexture,
-		destination = destination,
-		health      = 10,
+		destination = sdl.FRect {
+			x = 20,
+			y = WINDOW_WIDTH / 2,
+			w = f32(game.textures[PLAYER_TEXTURE_IDX].w) / playerScaleFactor,
+			h = f32(game.textures[PLAYER_TEXTURE_IDX].h) / playerScaleFactor,
+		},
+		health = 10,
 	}
-	game.player.destination.w = f32(playerTexture.w) / playerScaleFactor
-	game.player.destination.h = f32(playerTexture.h) / playerScaleFactor
 
-	// Load laser texture
-	laserTexture := sdlImage.LoadTexture(game.renderer, "./assets/bulletOrange.png")
+	// Lasers
+	game.textures[LASER_TEXTURE_IDX] = sdlImage.LoadTexture(
+		game.renderer,
+		"./assets/bulletOrange.png",
+	)
 	assert(
-		playerTexture != nil,
+		game.textures[LASER_TEXTURE_IDX] != nil,
 		fmt.tprintf(
 			"error: sdlImage.LoadTexture() failed while loading laserTexture: %v",
 			sdl.GetError(),
 		),
 	)
 
-	laserScaleFactor: f32 = 3
-	laserDestWidth := f32(laserTexture.w) / laserScaleFactor
-	laserDestHeight := f32(laserTexture.h) / laserScaleFactor
+	laserScaleFactor :: 3
+	laserDestWidth := f32(game.textures[LASER_TEXTURE_IDX].w) / laserScaleFactor
+	laserDestHeight := f32(game.textures[LASER_TEXTURE_IDX].h) / laserScaleFactor
 	laserStartingX := f32(WINDOW_WIDTH + 1)
 
 	for i in 0 ..< MAX_LASERS {
 		newLaser := Entity {
-			texture = laserTexture,
 			destination = {
 				x = laserStartingX,
 				y = WINDOW_HEIGHT,
@@ -163,7 +164,9 @@ createEntities :: proc() {
 				h = laserDestHeight,
 			},
 		}
-		game.laser[i] = newLaser
+		game.lasers.inactive[i] = newLaser
+		game.lasers.active[i] = newLaser
+		game.lasers.inactiveIdx += 1
 	}
 }
 
@@ -172,18 +175,20 @@ createEntities :: proc() {
 // ------------------------------------------------------------------------------------------------
 
 draw :: #force_inline proc() {
-	// Render assets
-	sdl.RenderTexture(game.renderer, game.player.texture, nil, &game.player.destination)
+	sdl.RenderTexture(
+		game.renderer,
+		game.textures[PLAYER_TEXTURE_IDX],
+		nil,
+		&game.player.destination,
+	)
 
-	for i in 0 ..< MAX_LASERS {
-		if game.laser[i].destination.x < WINDOW_WIDTH {
-			sdl.RenderTexture(
-				game.renderer,
-				game.laser[i].texture,
-				nil,
-				&game.laser[i].destination,
-			)
-		}
+	for i in 0 ..< game.lasers.activeIdx {
+		sdl.RenderTexture(
+			game.renderer,
+			game.textures[LASER_TEXTURE_IDX],
+			nil,
+			&game.lasers.active[i].destination,
+		)
 	}
 
 	// Clears the render so it starts with a blank slate for next frame
@@ -196,33 +201,30 @@ draw :: #force_inline proc() {
 // Initalize SDL 
 // ------------------------------------------------------------------------------------------------
 
-initWindow :: proc() {
+initWindow :: proc() -> ^sdl.Window {
 	assert(sdl.Init({.VIDEO}), fmt.tprintf("error: sdl.Init() failed: %v", string(sdl.GetError())))
 
-	game.window = sdl.CreateWindow("Odin space shooter", WINDOW_WIDTH, WINDOW_HEIGHT, nil)
+	window := sdl.CreateWindow("Odin space shooter", WINDOW_WIDTH, WINDOW_HEIGHT, nil)
 	assert(
-		game.window != nil,
+		window != nil,
 		fmt.tprintf("error: sdl.CreateWindow() failed: %v", string(sdl.GetError())),
 	)
 
-	game.renderer = sdl.CreateRenderer(game.window, nil)
+	game.renderer = sdl.CreateRenderer(window, nil)
 	assert(
 		game.renderer != nil,
 		fmt.tprintf("error: sld.CreateRenderer() failed: %v", string(sdl.GetError())),
 	)
+
+	return window
 }
 
 // ------------------------------------------------------------------------------------------------
 // Update
 // ------------------------------------------------------------------------------------------------
 
-update :: #force_inline proc() {
-	// Unlink Movement and framerate
-	getDeltaMotion := #force_inline proc(speed: f32) -> f32 {
-		return speed * TARGET_DELTA_TIME / 1000
-	}
-
-	// Update player 
+updateAssets :: #force_inline proc() {
+	// Player
 	movePlayer := #force_inline proc(x: f32, y: f32) {
 		// Clamp keeps a number within a range
 		game.player.destination.x = clamp(
@@ -237,47 +239,45 @@ update :: #force_inline proc() {
 		)
 	}
 
-	playerMovement := getDeltaMotion(PLAYER_SPEED)
-
-	if game.left {
-		movePlayer(-playerMovement, 0)
+	if game.keysPressed[sdl.Scancode.A] {
+		movePlayer(-PLAYER_DELTA_SPEED, 0)
 	}
-	if game.right {
-		movePlayer(playerMovement, 0)
+	if game.keysPressed[sdl.Scancode.D] {
+		movePlayer(PLAYER_DELTA_SPEED, 0)
 	}
-	if game.up {
-		movePlayer(0, -playerMovement)
+	if game.keysPressed[sdl.Scancode.W] {
+		movePlayer(0, -PLAYER_DELTA_SPEED)
 	}
-	if game.down {
-		movePlayer(0, playerMovement)
+	if game.keysPressed[sdl.Scancode.S] {
+		movePlayer(0, PLAYER_DELTA_SPEED)
 	}
 
-	// Update laser
-	if game.fire && game.ticksUntilFire <= 0 {
-		for i in 0 ..< MAX_LASERS {
-			if game.laser[i].destination.x > WINDOW_WIDTH {
-				game.laser[i].destination.x = game.player.destination.x + 30
-				game.laser[i].destination.y = game.player.destination.y
-				game.laser[i].health = 1
-				game.ticksUntilFire = TICKS_BETWEEN_SHOTS
-				game.activeLaserCount += 1
-				break
-			}
-		}
+	// Laser
+	if game.keysPressed[sdl.Scancode.SPACE] &&
+	   game.ticksUntilFire <= 0 &&
+	   game.lasers.activeIdx < MAX_LASERS {
+
+		game.lasers.active[game.lasers.activeIdx].destination.x = game.player.destination.x + 30
+		game.lasers.active[game.lasers.activeIdx].destination.y = game.player.destination.y
+
+		game.lasers.inactiveIdx -= 1
+		game.lasers.activeIdx += 1
+
+		game.ticksUntilFire = TICKS_BETWEEN_SHOTS
 	}
 
-	laserMovement := getDeltaMotion(LASER_SPEED)
+	// Using 2 loops prevents a very subtle bug where swapping the last element
+	// prevents a single tick of update for that element. Note this approach can give lasers
+  // off the screen an extra tick of movement. 
+	for i in 0 ..< game.lasers.activeIdx {
+		game.lasers.active[i].destination.x += LASER_DELTA_SPEED
+	}
 
-	if game.activeLaserCount > 0 {
-		for i in 0 ..< MAX_LASERS {
-			if game.laser[i].destination.x < WINDOW_WIDTH {
-				game.laser[i].destination.x += laserMovement
-
-				if game.laser[i].destination.x > WINDOW_WIDTH {
-					game.laser[i].health = 0
-					game.activeLaserCount -= 1
-				}
-			}
+	for i in 0 ..< game.lasers.activeIdx {
+		if game.lasers.active[i].destination.x > WINDOW_WIDTH {
+			game.lasers.inactiveIdx += 1
+			game.lasers.activeIdx -= 1
+			game.lasers.active[i] = game.lasers.active[game.lasers.activeIdx]
 		}
 	}
 
@@ -289,8 +289,6 @@ update :: #force_inline proc() {
 // ------------------------------------------------------------------------------------------------
 
 userInput :: #force_inline proc(event: ^sdl.Event) -> bool {
-	keyboardState := sdl.GetKeyboardState(nil)
-
 	for sdl.PollEvent(event) {
 		#partial switch event.type {
 		case sdl.EventType.QUIT:
@@ -304,11 +302,7 @@ userInput :: #force_inline proc(event: ^sdl.Event) -> bool {
 		}
 	}
 
-	game.left = keyboardState[sdl.Scancode.A]
-	game.right = keyboardState[sdl.Scancode.D]
-	game.up = keyboardState[sdl.Scancode.W]
-	game.down = keyboardState[sdl.Scancode.S]
-	game.fire = keyboardState[sdl.Scancode.SPACE]
+	game.keysPressed = sdl.GetKeyboardState(nil)
 
 	return false
 }
